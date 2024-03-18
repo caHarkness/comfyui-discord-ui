@@ -1,0 +1,17 @@
+__pycache__
+/venv/
+/output/
+token.txt
+
+/defaults.json
+
+/defaults/*.json
+!/defaults/default-workflow.json
+
+/workflows/*.json
+!/workflows/default-workflow.json
+
+/categories/*.json
+
+/users/*.json
+/roles/*.json

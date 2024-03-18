@@ -1,0 +1,14 @@
+{
+    "checkpoint": "v1-5-pruned-emaonly.ckpt",
+    "steps": 20,
+    "cfg": 8,
+    "width": 512,
+    "height": 512,
+    "batch_size": 1,
+    "positive": "beautiful scenery nature glass bottle landscape, purple galaxy bottle",
+    "negative": "text, watermark",
+    "max_steps": 20,
+    "max_batch_size": 1,
+    "max_width": 512,
+    "max_height": 512
+}
