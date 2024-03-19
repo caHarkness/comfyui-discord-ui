@@ -154,6 +154,7 @@ async def on_message(msg):
     log.write_message(msg)
 
     d = Deliverable.create_from_message(msg)
+    d.set_request_object(req)
     d.log_to_database()
 
     result = await handle_request(req, msg)
@@ -244,6 +245,7 @@ async def on_raw_reaction_add(rxn):
         log.write_reaction(user, msg, emoji)
 
         d = Deliverable.create_from_reaction(user, msg, emoji)
+        d.set_request_object(req)
         d.log_to_database()
 
         result = await handle_request(req, msg)

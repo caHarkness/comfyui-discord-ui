@@ -14,5 +14,12 @@
     "max_steps": 20,
     "max_batch_size": 1,
     "max_width": 512,
-    "max_height": 512
+    "max_height": 512,
+    "mysql_config": {
+        "user": "root",
+        "password": "password",
+        "host": "127.0.0.1",
+        "database": "comfyui_discord_ui",
+        "raise_on_warnings": true
+    }
 }
