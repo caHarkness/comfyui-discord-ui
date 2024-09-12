@@ -128,6 +128,9 @@ class Request:
 
     @to_thread
     def get_images(self):
+
+
+
         time_start = time.perf_counter()
 
         server_address = sdxl.get_least_busy_address(self.all_options["server_addresses"])
