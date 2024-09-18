@@ -49,6 +49,9 @@ async def handle_request(request_json, msg):
 
     result = json.loads(result.text)
 
+    if "output_files" not in result.keys():
+        return None
+
     #result = await req.get_images()
     images = result["output_files"]
 
@@ -75,7 +78,10 @@ async def handle_request(request_json, msg):
     #    await msg.add_reaction(REPEAT_EMOJI)
     #    await post.add_reaction(REPEAT_EMOJI)
 
-    #await post.add_reaction(REPEAT_EMOJI)
+    if "allow_repeat" in result["all_options"]:
+        if  result["all_options"]["allow_repeat"] == True:
+            await post.add_reaction(REPEAT_EMOJI)
+            
     await msg.remove_reaction(WAITING_EMOJI, client.user)
 
     time_end = time.perf_counter()
@@ -103,6 +109,8 @@ async def on_message(msg):
     category = ""
     if chl.category is not None:
         category = chl.category.name
+
+    log.write_message(msg)
 
     request_json = {
         "category":         category,
@@ -136,6 +144,8 @@ async def on_message(msg):
     # get images here:
 
     result = await handle_request(request_json, msg)
+    if result is None:
+            return
 
     d.execution_time = result["execution_time"]
     d.delivery_time = result["delivery_time"]
@@ -172,6 +182,8 @@ async def on_raw_reaction_add(rxn):
         # if not allow:
         #     return
 
+        log.write_reaction(user, msg, emoji)
+
         request_json = {
             "category":         category,
             "channel_topic":    chl.topic,
@@ -205,6 +217,8 @@ async def on_raw_reaction_add(rxn):
         # get images here:
 
         result = await handle_request(request_json, msg)
+        if result is None:
+            return
 
         d.execution_time = result["execution_time"]
         d.delivery_time = result["delivery_time"]
