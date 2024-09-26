@@ -10,22 +10,29 @@ import time
 import json
 import base64
 
-import lib.sdxl as sdxl
 import lib.db as db
 import lib.log as log
 
 from lib.log import colors
 from lib.helpers import *
 from lib.deliverable import Deliverable
-from lib.request import Request
 
 intents = discord.Intents(messages=True, guilds=True, message_content=True, reactions=True)
 client = discord.Client(intents=intents)
 
-'''
-Initial setup:
-'''
-mkdir("output")
+total_requests = 0
+
+async def adjust_requests(number_to_adjust):
+    global total_requests
+
+    total_requests = total_requests + number_to_adjust
+
+    if total_requests == 1:
+        await client.change_presence(activity=discord.CustomActivity(name="Working..."), status=discord.Status.online)
+
+    if total_requests < 1:
+        total_requests = 0
+        await client.change_presence(activity=discord.CustomActivity(name="Ready."), status=discord.Status.idle)
 
 '''
 Discord bot setup:
@@ -33,24 +40,35 @@ Discord bot setup:
 @client.event
 async def on_ready():
     print("READY")
+    await adjust_requests(0)
 
+async def get_request_stub(request_json):
+    result = requests.post(
+        f"http://127.0.0.1:5000/v1/stub",
+        json = request_json)
 
-async def handle_request(request_json, msg):
-    chl = msg.channel
+    return json.loads(result.text)
 
-    time_start = time.perf_counter()
+async def process_request_stub(stub_json, msg):
+    await adjust_requests(1)
+
+    chl         = msg.channel
+    time_start  = time.perf_counter()
 
     await msg.add_reaction(WAITING_EMOJI)
-
+    await chl.typing()
 
     result = requests.post(
-        f"http://127.0.0.1:5000/v1/base64",
-        json = request_json)
+        f"http://127.0.0.1:5000/v1/process",
+        json = stub_json)
 
     result = json.loads(result.text)
 
     if "output_files" not in result.keys():
+        await adjust_requests(-1)
         return None
+
+    await chl.typing()
 
     #result = await req.get_images()
     images = result["output_files"]
@@ -74,12 +92,9 @@ async def handle_request(request_json, msg):
         if len(images) < 1:
             break
 
-    #if "allow_repeat" in req.all_options.keys() and req.all_options["allow_repeat"] == True:
-    #    await msg.add_reaction(REPEAT_EMOJI)
-    #    await post.add_reaction(REPEAT_EMOJI)
-
     if "allow_repeat" in result["all_options"]:
-        if  result["all_options"]["allow_repeat"] == True:
+        if result["all_options"]["allow_repeat"] == True:
+            await msg.add_reaction(REPEAT_EMOJI)
             await post.add_reaction(REPEAT_EMOJI)
             
     await msg.remove_reaction(WAITING_EMOJI, client.user)
@@ -87,6 +102,7 @@ async def handle_request(request_json, msg):
     time_end = time.perf_counter()
     time_taken = time_end - time_start
 
+    await adjust_requests(-1)
     return {
         "server_address": result["server_address"],
         "execution_time": result["execution_time"],
@@ -133,28 +149,20 @@ async def on_message(msg):
     for role in msg.author.roles:
         request_json["user_roles"].append(role.name)
 
-    # get the API all_options here:
+    stub_info = await get_request_stub(request_json)
 
+    if "stub" in stub_info:
+        d = Deliverable.create_from_message(msg)
+        d.log_to_database()
 
+        result = await process_request_stub({"stub": stub_info["stub"]}, msg)
 
-    d = Deliverable.create_from_message(msg)
-    d.log_to_database()
+        d.execution_time = result["execution_time"]
+        d.delivery_time = result["delivery_time"]
+        d.processed_on = result["server_address"]
+        d.save()
 
-    #result = await handle_request(req, msg)
-    # get images here:
-
-    result = await handle_request(request_json, msg)
-    if result is None:
-            return
-
-    d.execution_time = result["execution_time"]
-    d.delivery_time = result["delivery_time"]
-    d.processed_on = result["server_address"]
-    d.save()
-
-    log.write(colors.fg.green + "Took %.2fs" % result["delivery_time"])
-
-
+        log.write(colors.fg.green + "Took %.2fs" % result["delivery_time"])
 
 @client.event
 async def on_raw_reaction_add(rxn):
@@ -206,26 +214,24 @@ async def on_raw_reaction_add(rxn):
         for role in rxn.member.roles:
             request_json["user_roles"].append(role.name)
 
-        # get the API all_options here:
+        stub_info = await get_request_stub(request_json)
 
+        if "stub" in stub_info:
+            if "all_options" in stub_info:
+                if "allow_repeat" in stub_info["all_options"]:
+                    if stub_info["all_options"]["allow_repeat"] == True:
+                        
+                        d = Deliverable.create_from_reaction(user, msg, emoji)
+                        d.log_to_database()
 
+                        result = await process_request_stub({"stub": stub_info["stub"]}, msg)
 
-        d = Deliverable.create_from_reaction(user, msg, emoji)
-        d.log_to_database()
+                        d.execution_time = result["execution_time"]
+                        d.delivery_time = result["delivery_time"]
+                        d.processed_on = result["server_address"]
+                        d.save()
 
-        #result = await handle_request(req, msg)
-        # get images here:
-
-        result = await handle_request(request_json, msg)
-        if result is None:
-            return
-
-        d.execution_time = result["execution_time"]
-        d.delivery_time = result["delivery_time"]
-        d.processed_on = result["server_address"]
-        d.save()
-
-        log.write(colors.fg.green + "Took %.2fs" % result["delivery_time"])
+                        log.write(colors.fg.green + "Took %.2fs" % result["delivery_time"])
 
 '''
 Begin the Discord bot magic:
