@@ -1,2 +1,0 @@
-REPEAT_EMOJI = "♻️"
-WAITING_EMOJI = "🕒"

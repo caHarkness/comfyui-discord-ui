@@ -15,3 +15,5 @@ token.txt
 
 /users/*.json
 /roles/*.json
+
+/config.py

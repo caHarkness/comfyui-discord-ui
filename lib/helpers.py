@@ -1,11 +1,10 @@
 import os
 import json
+import base64
 
+import lib.log as log
 
-
-'''
-Read an entire file into a string:
-'''
+# Make it easy to read a file
 def read_file(path, default_value=""):
     try:
         text = ""
@@ -31,7 +30,7 @@ def read_json(path, default_value={}):
 
     return default_value
 
-# Make it easy to read a json file
+# Make it easy to read lines in a file
 def read_lines(path, default_value=[]):
     if os.path.isfile(path):
         try:
@@ -50,43 +49,7 @@ def read_lines(path, default_value=[]):
 
     return default_value
 
-# Return first non-null value
-# https://stackoverflow.com/a/16247152
-def coalesce(*arg):
-  for el in arg:
-    if el is not None:
-      return el
-  return None
-
-# Allows function to be awaited for without blocking?
-# https://stackoverflow.com/a/50450553
-import asyncio
-from functools import partial, wraps
-
-def to_thread(func):
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        loop = asyncio.get_event_loop()
-        callback = partial(func, *args, **kwargs)
-        return await asyncio.to_thread(callback)
-    return wrapper
-
-
-import time
-from datetime import datetime
-
-def get_timestamp():
-    now = datetime.now()
-    timestamp = now.strftime("%f")[:-3]
-    timestamp = now.strftime("%Y%m%d_%H%M%S_") + timestamp
-    return timestamp
-
-def get_timestamp_log():
-    now = datetime.now()
-    timestamp = now.strftime("%f")[:-3]
-    timestamp = now.strftime("%Y-%m-%d %H:%M:%S.") + timestamp
-    return timestamp
-
+# Make it easy to merge two JSON objects
 def json_merge(a, b):
     if b is None:
         return a
@@ -100,66 +63,42 @@ def json_merge(a, b):
             output[k] = b[k]
     return output
 
-def channel_topic_to_defaults(input_str):
-    output = {}
-    output = json_merge(output, read_json("defaults.json", {}))
+# A decorator that "tries" arg1 times, and throws the arg2 message
+from functools import wraps
 
-    input_str = input_str + ","
-    parts = input_str.split(",")
-    
-    for part in parts:
-        actual_part = part.strip()
+def retry_or_throw(times_allowed, exception_message):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            fails = 0
+            while True:
+                try:
+                    return await func(*args, **kwargs)
 
-        if len(actual_part) < 1:
-            continue
+                except Exception as e:
+                    log.write(f"{log.colors.fg.red}{e}")
 
-        output = json_merge(output, read_json(f"defaults/{actual_part}.json", {}))
+                    fails = fails + 1
+                    if fails >= times_allowed:
+                        break
+                    continue
 
-    return output
+            raise Exception(f"{exception_message} (Failed {fails} times)")
+        return wrapper
+    return decorator
 
-def channel_topic_first_part(input_str):
-    input_str = input_str + ","
-    first_part = input_str.split(",")[0]
-    first_part = first_part.strip()
-    return first_part
+# Access a ClientSession singleton:
+import aiohttp
 
-def channel_topic_workflow(input_str):
-    first_part = channel_topic_first_part(input_str)
-    return read_json(f"workflows/{first_part}.json", {})
-
-def channel_topic_workflow_text(input_str):
-    first_part = channel_topic_first_part(input_str)
-
-    f = open(f"workflows/{first_part}.json")
-    workflow_json = f.read()
-    f.close()
-
-    return workflow_json
-
-def mkdir(path):
-    try:
-        os.mkdir(path)
-    except:
-        pass
-
-
-import re
-
-def make_replacements(input_string, pat, replacement):
-    if input_string is None:
-        return input_string
-
-    using = input_string
-    match = re.search(pat, using)
-    while match is not None:
-        using = re.sub(pat, str(replacement), using)
-        match = re.search(pat, using)
-    return using
+http_session = None
+def get_http_session():
+    global http_session
+    if http_session is None:
+        http_session = aiohttp.ClientSession()
+    return http_session
 
 # https://stackoverflow.com/questions/38408253/way-to-convert-image-straight-from-url-to-base64-without-saving-as-a-file-in-pyt
-import base64
-import requests
-
-@to_thread
-def get_attachment_base64(url):
-    return base64.b64encode(requests.get(url).content).decode("utf-8")
+async def get_attachment_base64(url):
+    result      = await get_http_session().get(url)
+    attachment  = await result.read()
+    return base64.b64encode(attachment).decode("utf-8")

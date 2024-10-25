@@ -39,6 +39,21 @@ class colors:
         cyan = "\033[46m"
         lightgrey = "\033[47m"
 
+import time
+from datetime import datetime
+
+def get_timestamp():
+    now = datetime.now()
+    timestamp = now.strftime("%f")[:-3]
+    timestamp = now.strftime("%Y%m%d_%H%M%S_") + timestamp
+    return timestamp
+
+def get_timestamp_log():
+    now = datetime.now()
+    timestamp = now.strftime("%f")[:-3]
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S.") + timestamp
+    return timestamp
+
 def write(user_input):
     timestamp = get_timestamp_log()
     output = f"{colors.fg.darkgrey}[{timestamp}] {user_input}{colors.reset}"
